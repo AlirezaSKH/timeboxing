@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeboxing Daily Planner</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="title">
+                <span class="icon">⏱</span>
+                <h1>TIMEBOXING</h1>
+            </div>
+            <h2>Daily Planner</h2>
+        </header>
+        <form method="POST">
+            <div class="date-picker">
+                <label for="date">Date:</label>
+                <input type="date" id="date" name="date" value="{{ date }}" required>
+            </div>
+            <div class="planner-grid">
+                <div class="left-column">
+                    <section class="top-priorities">
+                        <h3>Top Priorities:</h3>
+                        <textarea name="top_priorities" rows="4">{{ entry.top_priorities if entry else '' }}</textarea>
+                    </section>
+                    <section class="brain-dump">
+                        <h3>Brain-Dump:</h3>
+                        <textarea name="brain_dump" rows="20">{{ entry.brain_dump if entry else '' }}</textarea>
+                    </section>
+                </div>
+                <div class="right-column">
+                    <section class="schedule">
+                        <div class="schedule-header">
+                            <span>:00</span>
+                            <span>:30</span>
+                        </div>
+                        <div class="time-slots">
+                            {% for hour in range(5, 24) %}
+                                <div class="time-slot">
+                                    <span class="time">{{ hour }}</span>
+                                    <input type="text" name="{{ "%02d"|format(hour) }}:00" value="{{ schedule["%02d:00"|format(hour)] }}">
+                                    <input type="text" name="{{ "%02d"|format(hour) }}:30" value="{{ schedule["%02d:30"|format(hour)] }}">
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </section>
+                </div>
+            </div>
+            <div class="actions">
+                <button type="submit">Save</button>
+                <a href="{{ url_for('view_history') }}" class="button">View History</a>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
