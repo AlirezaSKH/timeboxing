@@ -11,6 +11,11 @@ from PyQt5.QtGui import QColor
 
 from dotenv import load_dotenv
 import os
+from PyQt5.QtMultimedia import QSound
+from PyQt5.QtCore import QTime
+
+
+
 
 load_dotenv()
 
@@ -23,6 +28,7 @@ class DatabaseWorker(QThread):
         self.func = func
         self.args = args
         self.kwargs = kwargs
+        print("TimeboxingApp initialized")
 
     def run(self):
         try:
@@ -40,14 +46,68 @@ class TimeboxingApp(QMainWindow):
         self.setWindowTitle("Timeboxing Daily Planner")
         self.setGeometry(100, 100, 1000, 800)
         self.setStyleSheet("background-color: #f0f4f8;")
-
-        self.worker_threads = []  # Add this line
-
+        self.worker_threads = []
+        self.alert_timer = QTimer(self)
+        self.alert_timer.timeout.connect(self.check_alerts)
+        self.alert_timer.start(60000)  # Check every minute
         self.init_db()
         self.init_ui()
         
         # Load the entry for the current date after a short delay
         QTimer.singleShot(100, self.load_entry)
+        
+        print("TimeboxingApp initialized")
+        print("Init complete")
+
+
+    def check_alerts(self):
+        current_time = QTime.currentTime()
+        current_time_str = current_time.toString("HH:mm")
+        
+        for time, task_combo in self.schedule_inputs.items():
+            task = task_combo.currentText()
+            if task:
+                if time == current_time_str:
+                    if self.start_alert_checkbox.isChecked():
+                        self.show_alert(f"Start task: {task}")
+                elif self.time_diff(time, current_time_str) == 1:
+                    if self.end_alert_checkbox.isChecked():
+                        self.show_alert(f"End task soon: {task}")
+
+
+
+    def show_alert(self, message):
+        QSound.play("path/to/your/sound/file.wav")  # Play a sound
+        QMessageBox.information(self, "Task Alert", message)
+
+    def time_diff(self, time1, time2):
+        t1 = QTime.fromString(time1, "HH:mm")
+        t2 = QTime.fromString(time2, "HH:mm")
+        return t1.secsTo(t2) // 60  # Return difference in minutes
+
+
+    def change_font_size(self, size_text):
+        size_map = {'Small': 8, 'Medium': 10, 'Large': 12}
+        size = size_map[size_text]
+        self.setStyleSheet(f"font-size: {size}pt;")
+        self.update_widgets_font_size(size)
+
+    def update_widgets_font_size(self, size):
+        for widget in self.findChildren(QWidget):
+            font = widget.font()
+            font.setPointSize(size)
+            widget.setFont(font)
+        
+        # Update specific widgets that might need adjustments
+        self.top_priorities.setStyleSheet(f"font-size: {size}pt; background-color: white; border: 1px solid #ddd; border-radius: 4px;")
+        self.brain_dump.setStyleSheet(f"font-size: {size}pt; background-color: white; border: 1px solid #ddd; border-radius: 4px;")
+        
+        for combo in self.schedule_inputs.values():
+            combo.setStyleSheet(f"font-size: {size}pt;")
+        
+        # Refresh the layout
+        self.update()
+
 
 
     def closeEvent(self, event):
@@ -98,17 +158,12 @@ class TimeboxingApp(QMainWindow):
         self.date_edit = QDateEdit()
         self.date_edit.setDate(QDate.currentDate())
         self.date_edit.setCalendarPopup(True)
-        self.date_edit.dateChanged.connect(self.load_entry)
+        self.date_edit.dateChanged.connect(self.on_date_changed)
         date_layout.addWidget(date_label)
         date_layout.addWidget(self.date_edit)
         date_layout.addStretch()
         main_layout.addLayout(date_layout)
 
-
-        self.date_edit = QDateEdit()
-        self.date_edit.setDate(QDate.currentDate())
-        self.date_edit.setCalendarPopup(True)
-        self.date_edit.dateChanged.connect(self.on_date_changed)
 
         # Main content area
         content_layout = QHBoxLayout()
@@ -130,6 +185,36 @@ class TimeboxingApp(QMainWindow):
         self.brain_dump.setStyleSheet("background-color: white; border: 1px solid #ddd; border-radius: 4px;")
         self.brain_dump.textChanged.connect(self.update_task_options)
         left_column.addWidget(self.brain_dump)
+
+
+
+        # Font size selector
+        font_size_layout = QHBoxLayout()
+        font_size_layout.addWidget(QLabel("Font Size:"))
+        self.font_size_combo = QComboBox()
+        self.font_size_combo.addItems(['Small', 'Medium', 'Large'])
+        self.font_size_combo.setCurrentIndex(1)  # Set 'Medium' as default
+        self.font_size_combo.currentTextChanged.connect(self.change_font_size)
+        font_size_layout.addWidget(self.font_size_combo)
+
+        # Add this layout to your main layout, for example:
+        main_layout.addLayout(font_size_layout)
+
+
+
+
+        # Alert controls
+        alert_layout = QHBoxLayout()
+        alert_layout.addWidget(QLabel("Alerts:"))
+
+        self.start_alert_checkbox = QCheckBox("Start Task")
+        self.end_alert_checkbox = QCheckBox("End Task")
+        alert_layout.addWidget(self.start_alert_checkbox)
+        alert_layout.addWidget(self.end_alert_checkbox)
+
+        # Add this layout near your font size selector
+        main_layout.addLayout(alert_layout)
+
 
         # Add left column to content layout
         content_layout.addLayout(left_column, 1)
@@ -181,8 +266,9 @@ class TimeboxingApp(QMainWindow):
         save_button.setStyleSheet("background-color: #3498db; color: white; padding: 10px 20px; border: none; border-radius: 4px;")
         save_button.clicked.connect(self.save_entry)
         main_layout.addWidget(save_button, alignment=Qt.AlignCenter)
+        self.change_font_size('Medium')
 
-        self.load_entry()
+        
 
 
 
@@ -253,7 +339,8 @@ class TimeboxingApp(QMainWindow):
 
 
     def save_entry(self):
-        date = self.date_edit.date().toString(Qt.ISODate)
+        print("Starting save_entry")
+        date = self.date_edit.date().toString("yyyy-MM-dd")
         top_priorities = self.top_priorities.toPlainText()
         brain_dump = self.brain_dump.toPlainText()
         schedule = {
@@ -265,14 +352,20 @@ class TimeboxingApp(QMainWindow):
         }
         schedule_json = json.dumps(schedule)
 
-        worker = DatabaseWorker(self._save_entry, date, top_priorities, brain_dump, schedule_json)
-        worker.finished.connect(self.on_save_finished)
-        worker.error.connect(self.on_save_error)
-        worker.finished.connect(worker.deleteLater)
-        worker.start()
-        self.worker_threads.append(worker)
+        try:
+            result = self._save_entry(date, top_priorities, brain_dump, schedule_json)
+            self.on_save_finished(result)
+        except Exception as e:
+            self.on_save_error(str(e))
+        
+        self.update_alerts()
+        print("Finished save_entry")
 
-
+    def update_alerts(self):
+        if self.start_alert_checkbox.isChecked() or self.end_alert_checkbox.isChecked():
+            self.alert_timer.start(60000)  # Check every minute
+        else:
+            self.alert_timer.stop()
 
     def _save_entry(self, date, top_priorities, brain_dump, schedule):
         try:
@@ -300,29 +393,34 @@ class TimeboxingApp(QMainWindow):
             raise e
 
     def on_save_finished(self, message):
+        print("Starting on_save_finished")
         QMessageBox.information(self, "Success", message)
-        if self.sender() in self.worker_threads:
-            self.worker_threads.remove(self.sender())
+        print("Finished on_save_finished")
 
     def on_save_error(self, error_message):
+        print(f"Save error: {error_message}")
         QMessageBox.critical(self, "Error", f"Failed to save entry: {error_message}")
         if self.sender() in self.worker_threads:
             self.worker_threads.remove(self.sender())
 
-    def on_date_changed(self, new_date):
-        self.load_entry()
+    
 
-    def load_entry(self):
-        date = self.date_edit.date().toString(Qt.ISODate)
+    def load_entry(self, date=None):
+        if date is None:
+            date = self.date_edit.date().toString("yyyy-MM-dd")
+        elif isinstance(date, QDate):
+            date = date.toString("yyyy-MM-dd")
+        
         worker = DatabaseWorker(self._load_entry, date)
         worker.finished.connect(self.on_load_finished)
         worker.error.connect(self.on_load_error)
-        worker.finished.connect(worker.deleteLater)  # Add this line
         worker.start()
-        self.worker_threads.append(worker)  # Add this line
+        self.worker_threads.append(worker)
 
 
-
+    def on_date_changed(self, new_date):
+        date_str = new_date.toString("yyyy-MM-dd")
+        self.load_entry(date_str)
 
     def _load_entry(self, date):
         try:
@@ -337,14 +435,14 @@ class TimeboxingApp(QMainWindow):
                 if isinstance(schedule, dict):
                     schedule = json.dumps(schedule)
                 return (id, date, top_priorities, brain_dump, schedule)
-            return None  # Return None instead of raising an exception
+            return None  # Return None if no entry is found
         except Exception as e:
             print(f"Error in _load_entry: {e}")  # Print the error for debugging
             return None  # Return None on any error
 
     def on_load_finished(self, entry):
         if entry:
-            _, _, top_priorities, brain_dump, schedule = entry
+            _, date, top_priorities, brain_dump, schedule = entry
             self.top_priorities.setPlainText(top_priorities)
             self.brain_dump.setPlainText(brain_dump)
             
@@ -378,6 +476,7 @@ class TimeboxingApp(QMainWindow):
             
             self.update_schedule_colors()
         else:
+            # Clear all fields if no entry is found
             self.top_priorities.clear()
             self.brain_dump.clear()
             for input in self.schedule_inputs.values():
@@ -422,5 +521,8 @@ if __name__ == '__main__':
         sys.exit(app.exec_())
     except KeyboardInterrupt:
         print("Keyboard interrupt received. Exiting...")
+    except Exception as e:
+        print(f"Unexpected error occurred: {e}")
+    finally:
         window.close()
         sys.exit(0)
